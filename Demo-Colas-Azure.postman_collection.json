@@ -1,0 +1,234 @@
+{
+	"info": {
+		"_postman_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+		"name": "Demo Colas Azure - Service Bus PoC",
+		"description": "Colección de Postman para el microservicio de Azure Service Bus con control dinámico de escucha de mensajes.\n\nFuncionalidades cubiertas:\n- Consultar estado del listener y métricas de procesamiento\n- Encender / Apagar el listener inmediatamente y en BD\n- Enviar mensajes de prueba a la cola de entrada (testing local/remoto)\n- Monitoreo de salud y métricas con Spring Boot Actuator\n\nVariables:\n- {{base_url}}: URL base del servicio (default: http://localhost:8080)",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"variable": [
+		{
+			"key": "base_url",
+			"value": "http://localhost:8080",
+			"type": "string"
+		}
+	],
+	"item": [
+		{
+			"name": "Control del Listener",
+			"item": [
+				{
+					"name": "Consultar estado y métricas del listener",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/config/listener-status",
+							"host": ["{{base_url}}"],
+							"path": ["api", "config", "listener-status"]
+						},
+						"description": "Retorna el estado actual del listener y contadores de métricas:\n- **enabled**: valor guardado en base de datos PostgreSQL\n- **running**: si el ServiceBusProcessorClient está activo en memoria\n- **metrics**: mensajes procesados, abandonados (al apagar), errores y timestamp del último mensaje procesado"
+					},
+					"response": [
+						{
+							"name": "Listener activo con métricas",
+							"status": "OK",
+							"code": 200,
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								}
+							],
+							"body": "{\n  \"enabled\": true,\n  \"running\": true,\n  \"metrics\": {\n    \"messagesProcessed\": 5,\n    \"messagesAbandoned\": 1,\n    \"messagesDeadLettered\": 0,\n    \"messagesErrored\": 0,\n    \"lastMessageProcessedAt\": \"2026-10-27T19:30:00Z\"\n  }\n}"
+						}
+					]
+				},
+				{
+					"name": "Apagar listener (desactivar consumo)",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"enabled\": false\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/api/config/listener-status",
+							"host": ["{{base_url}}"],
+							"path": ["api", "config", "listener-status"]
+						},
+						"description": "Cambia el estado a **APAGADO** en PostgreSQL y detiene de inmediato el ServiceBusProcessorClient en memoria.\n\nEfectos:\n- Si había un mensaje en proceso, se hace `abandon()` para que Azure lo devuelva a la cola como reintento.\n- No se consumen más mensajes de la cola de entrada."
+					},
+					"response": [
+						{
+							"name": "Listener apagado exitosamente",
+							"status": "OK",
+							"code": 200,
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								}
+							],
+							"body": "{\n  \"enabled\": false,\n  \"running\": false,\n  \"message\": \"Listener apagado inmediatamente y guardado en BD. Mensajes in-flight abandonados para reintento.\"\n}"
+						}
+					]
+				},
+				{
+					"name": "Encender listener (activar consumo)",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"enabled\": true\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/api/config/listener-status",
+							"host": ["{{base_url}}"],
+							"path": ["api", "config", "listener-status"]
+						},
+						"description": "Cambia el estado a **ENCENDIDO** en PostgreSQL e inicia de inmediato el ServiceBusProcessorClient en memoria.\n\nEfectos:\n- Se inicia el procesamiento de mensajes de la cola de entrada.\n- Cada mensaje es enriquecido y reenviado a la cola de salida con acuse de recibo (`complete()`)."
+					},
+					"response": [
+						{
+							"name": "Listener encendido exitosamente",
+							"status": "OK",
+							"code": 200,
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								}
+							],
+							"body": "{\n  \"enabled\": true,\n  \"running\": true,\n  \"message\": \"Listener encendido inmediatamente y guardado en BD.\"\n}"
+						}
+					]
+				}
+			]
+		},
+		{
+			"name": "Pruebas de Mensajería",
+			"item": [
+				{
+					"name": "Enviar mensaje de prueba a cola de entrada",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"message\": \"{\\\"orderId\\\": \\\"ORD-999\\\", \\\"amount\\\": 150.50, \\\"customer\\\": \\\"Sergio\\\"}\",\n  \"properties\": {\n    \"origen\": \"Prueba-Postman\",\n    \"ambiente\": \"PoC\"\n  }\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/api/messages/send",
+							"host": ["{{base_url}}"],
+							"path": ["api", "messages", "send"]
+						},
+						"description": "Envía un mensaje a la cola de entrada de Azure Service Bus para validar el flujo completo sin ir al portal de Azure."
+					},
+					"response": [
+						{
+							"name": "Mensaje enviado exitosamente",
+							"status": "OK",
+							"code": 200,
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								}
+							],
+							"body": "{\n  \"status\": \"SENT_TO_INPUT_QUEUE\",\n  \"messageId\": \"c6a7a0b3-fdf4-469a-8a8b-c9a7ff527941\",\n  \"content\": \"{\\\"orderId\\\": \\\"ORD-999\\\", \\\"amount\\\": 150.50, \\\"customer\\\": \\\"Sergio\\\"}\",\n  \"properties\": {\n    \"origen\": \"Prueba-Postman\",\n    \"ambiente\": \"PoC\"\n  }\n}"
+						}
+					]
+				}
+			]
+		},
+		{
+			"name": "Actuator & Monitoreo",
+			"item": [
+				{
+					"name": "Health Check General",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/actuator/health",
+							"host": ["{{base_url}}"],
+							"path": ["actuator", "health"]
+						},
+						"description": "Consulta el estado de salud completo de la aplicación (PostgreSQL, Service Bus y componentes)."
+					}
+				},
+				{
+					"name": "Kubernetes Liveness Probe",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/actuator/health/liveness",
+							"host": ["{{base_url}}"],
+							"path": ["actuator", "health", "liveness"]
+						},
+						"description": "Probe de Kubernetes para verificar si el Pod está vivo o se ha vuelto zombie (reinicia el contenedor si devuelve DOWN)."
+					}
+				},
+				{
+					"name": "Kubernetes Readiness Probe",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/actuator/health/readiness",
+							"host": ["{{base_url}}"],
+							"path": ["actuator", "health", "readiness"]
+						},
+						"description": "Probe de Kubernetes para verificar si el Pod está listo para recibir tráfico."
+					}
+				},
+				{
+					"name": "Métricas generales",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/actuator/metrics",
+							"host": ["{{base_url}}"],
+							"path": ["actuator", "metrics"]
+						},
+						"description": "Lista todas las métricas expuestas por Spring Boot Actuator."
+					}
+				}
+			]
+		}
+	]
+}

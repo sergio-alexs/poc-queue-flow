@@ -1,0 +1,5 @@
+CREATE TABLE IF NOT EXISTS app_config (
+    id SERIAL PRIMARY KEY,
+    config_key VARCHAR(255) UNIQUE NOT NULL,
+    config_value VARCHAR(255) NOT NULL
+);

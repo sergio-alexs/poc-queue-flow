@@ -1,0 +1,79 @@
+# ==============================================================================
+# GITIGNORE - Demo Colas Azure
+# ==============================================================================
+
+# Maven y Maven Wrapper
+.mvn/
+mvnw
+mvnw.cmd
+target/
+pom.xml.tag
+pom.xml.releaseBackup
+pom.xml.versionsBackup
+pom.xml.next
+release.properties
+dependency-reduced-pom.xml
+buildNumber.properties
+!**/src/main/**/target/
+!**/src/test/**/target/
+
+# Variables de entorno y secretos
+.env
+.env.local
+.env.*.local
+set-env.ps1
+*.key
+*.pem
+
+# Archivos de logs
+*.log
+logs/
+log/
+
+# Sistema Operativo
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+# IDEs y Editores
+
+### Visual Studio Code ###
+.vscode/
+*.code-workspace
+
+### IntelliJ IDEA ###
+.idea/
+.run/
+*.iws
+*.iml
+*.ipr
+out/
+
+### Eclipse / STS ###
+.apt_generated
+.classpath
+.factorypath
+.project
+.settings
+.springBeans
+.sts4-cache
+
+### NetBeans ###
+/nbproject/private/
+/nbbuild/
+/dist/
+/nbdist/
+/.nb-gradle/
+build/
+!**/src/main/**/build/
+!**/src/test/**/build/
+
+# Datos temporales de bases de datos y contenedores
+*.sql.dump
+*.dump
+.docker/
