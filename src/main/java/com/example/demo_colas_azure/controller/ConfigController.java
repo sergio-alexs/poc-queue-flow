@@ -46,8 +46,10 @@ public class ConfigController {
         Map<String, Object> response = new LinkedHashMap<>();
         response.put("enabled", dbEnabled);
         response.put("running", isRunning);
+        response.put("mode", queueListenerManager.getMode());
 
         Map<String, Object> metrics = new LinkedHashMap<>();
+        metrics.put("inFlightMessages", queueListenerManager.getInFlightMessages());
         metrics.put("messagesProcessed", queueListenerManager.getMessagesProcessed());
         metrics.put("messagesAbandoned", queueListenerManager.getMessagesAbandoned());
         metrics.put("messagesDeadLettered", queueListenerManager.getMessagesDeadLettered());
@@ -97,9 +99,10 @@ public class ConfigController {
         Map<String, Object> response = new LinkedHashMap<>();
         response.put("enabled", enabled);
         response.put("running", queueListenerManager.isRunning());
+        response.put("mode", queueListenerManager.getMode());
         response.put("message", enabled 
                 ? "Listener encendido inmediatamente y guardado en BD." 
-                : "Listener apagado inmediatamente y guardado en BD. Mensajes in-flight abandonados para reintento.");
+                : "Listener apagado y guardado en BD con drenaje acotado de mensajes in-flight.");
 
         return ResponseEntity.ok(response);
     }

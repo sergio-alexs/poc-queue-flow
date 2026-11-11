@@ -68,10 +68,10 @@ sequenceDiagram
 
 1. **Gestión Dinámica del Ciclo de Vida del Processor**:
    - `ServiceBusProcessorClient` no es un bean estático; se crea, inicia y destruye en demanda sin reiniciar el proceso.
-   - Concurrencia controlada con `maxConcurrentCalls(1)`.
-2. **Cero Pérdida de Datos (In-Flight Safety)**:
-   - Recepción en modo `PEEK_LOCK`.
-   - Si el listener se detiene mientras se procesa un mensaje o ante un error inesperado, se ejecuta `context.abandon()`, devolviéndolo a la cola para reintento.
+   - Modos seleccionables por perfil de Spring: `single` (por defecto, `maxConcurrentCalls=1`) y `multiple` (procesamiento concurrente con `maxConcurrentCalls` y `prefetchCount` configurables mediante `MultipleQueueListenerConfig`).
+2. **Cero Pérdida de Datos y Apagado Ordenado (In-Flight Safety)**:
+   - Recepción en modo `PEEK_LOCK` con `disableAutoComplete()`.
+   - Al apagar el listener (en `single` o `multiple`), pausa nuevas entregas (`stop()`), espera hasta `drain-timeout` (`10s`) a que finalicen los mensajes ya en procesamiento, abandona mensajes pendientes en buffer mediante `context.abandon()` y cierra el cliente de forma acotada (`close-timeout`, `5s`).
 3. **Reconciliación Dual (REST + Cron)**:
    - El cambio vía `PUT /api/config/listener-status` se aplica **inmediatamente** en memoria y se persiste en BD.
    - El cron (`@Scheduled(fixedRate = 60000)`) garantiza que cualquier cambio manual directo en PostgreSQL se replique como máximo en 1 minuto.
@@ -124,6 +124,11 @@ Puedes consultar la plantilla base en [.env.example](file:///.env.example):
 | `AZURE_SERVICEBUS_RETRY_MAX_DELAY` | No | `10s` | Retardo máximo entre reintentos AMQP. |
 | `AZURE_SERVICEBUS_MAX_AUTO_LOCK_RENEW_DURATION` | No | `5m` | Tiempo máximo de auto-renovación de bloqueo (retención de mensaje). |
 | `AZURE_SERVICEBUS_MAX_DELIVERY_COUNT` | No | `5` | Límite de intentos de entrega antes de enviar a Dead-Letter Queue (DLQ). |
+| `AZURE_SERVICEBUS_DRAIN_TIMEOUT` | No | `10s` | Espera máxima para drenar mensajes en vuelo al detener el listener. |
+| `AZURE_SERVICEBUS_CLOSE_TIMEOUT` | No | `5s` | Tiempo máximo para cerrar la conexión del processor tras drenar. |
+| `SPRING_PROFILES_ACTIVE` | No | `single` | Perfil del listener: `single` (1 mensaje a la vez) o `multiple` (concurrente). |
+| `AZURE_SERVICEBUS_MULTIPLE_MAX_CONCURRENT_CALLS` | No | `10` | Mensajes procesados en paralelo cuando el perfil `multiple` está activo. |
+| `AZURE_SERVICEBUS_MULTIPLE_PREFETCH_COUNT` | No | `20` | Mensajes pre-cargados en memoria cuando el perfil `multiple` está activo. |
 | `SPRING_DATASOURCE_URL` | No | `jdbc:postgresql://localhost:5432/demo_colas` | URL JDBC de conexión a PostgreSQL. |
 | `SPRING_DATASOURCE_USERNAME` | No | `postgres` | Usuario de base de datos. |
 | `SPRING_DATASOURCE_PASSWORD` | No | `postgres` | Contraseña de base de datos. |
@@ -198,7 +203,9 @@ La API se expone en `http://localhost:8080`. Se incluye la colección de Postman
   {
     "enabled": true,
     "running": true,
+    "mode": "single",
     "metrics": {
+      "inFlightMessages": 0,
       "messagesProcessed": 12,
       "messagesAbandoned": 1,
       "messagesErrored": 0,
@@ -224,7 +231,8 @@ La API se expone en `http://localhost:8080`. Se incluye la colección de Postman
   {
     "enabled": false,
     "running": false,
-    "message": "Listener apagado inmediatamente y guardado en BD. Mensajes in-flight abandonados para reintento."
+    "mode": "single",
+    "message": "Listener apagado y guardado en BD con drenaje acotado de mensajes in-flight."
   }
   ```
 - **Payload para Encender**:

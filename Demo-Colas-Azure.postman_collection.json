@@ -26,7 +26,7 @@
 							"host": ["{{base_url}}"],
 							"path": ["api", "config", "listener-status"]
 						},
-						"description": "Retorna el estado actual del listener y contadores de métricas:\n- **enabled**: valor guardado en base de datos PostgreSQL\n- **running**: si el ServiceBusProcessorClient está activo en memoria\n- **metrics**: mensajes procesados, abandonados (al apagar), errores y timestamp del último mensaje procesado"
+						"description": "Retorna el estado actual del listener y contadores de métricas:\n- **enabled**: valor guardado en base de datos PostgreSQL\n- **running**: si el ServiceBusProcessorClient está activo en memoria\n- **mode**: perfil activo del listener (`single` o `multiple`)\n- **metrics**: mensajes procesados, abandonados (al apagar), errores y timestamp del último mensaje procesado"
 					},
 					"response": [
 						{
@@ -39,7 +39,7 @@
 									"value": "application/json"
 								}
 							],
-							"body": "{\n  \"enabled\": true,\n  \"running\": true,\n  \"metrics\": {\n    \"messagesProcessed\": 5,\n    \"messagesAbandoned\": 1,\n    \"messagesDeadLettered\": 0,\n    \"messagesErrored\": 0,\n    \"lastMessageProcessedAt\": \"2026-10-27T19:30:00Z\"\n  }\n}"
+							"body": "{\n  \"enabled\": true,\n  \"running\": true,\n  \"mode\": \"single\",\n  \"metrics\": {\n    \"inFlightMessages\": 0,\n    \"messagesProcessed\": 5,\n    \"messagesAbandoned\": 1,\n    \"messagesDeadLettered\": 0,\n    \"messagesErrored\": 0,\n    \"lastMessageProcessedAt\": \"2026-10-27T19:30:00Z\"\n  }\n}"
 						}
 					]
 				},
@@ -67,7 +67,7 @@
 							"host": ["{{base_url}}"],
 							"path": ["api", "config", "listener-status"]
 						},
-						"description": "Cambia el estado a **APAGADO** en PostgreSQL y detiene de inmediato el ServiceBusProcessorClient en memoria.\n\nEfectos:\n- Si había un mensaje en proceso, se hace `abandon()` para que Azure lo devuelva a la cola como reintento.\n- No se consumen más mensajes de la cola de entrada."
+						"description": "Cambia el estado a **APAGADO** en PostgreSQL, detiene nuevas entregas, espera el drenaje acotado de mensajes en vuelo y cierra el ServiceBusProcessorClient en memoria (tanto en perfil `single` como `multiple`).\n\nEfectos:\n- Los mensajes ya en ejecución terminan ordenadamente dentro del `drain-timeout`.\n- Cualquier mensaje pendiente que entre después se abandona (`abandon()`) para reintento en Azure."
 					},
 					"response": [
 						{
@@ -80,7 +80,7 @@
 									"value": "application/json"
 								}
 							],
-							"body": "{\n  \"enabled\": false,\n  \"running\": false,\n  \"message\": \"Listener apagado inmediatamente y guardado en BD. Mensajes in-flight abandonados para reintento.\"\n}"
+							"body": "{\n  \"enabled\": false,\n  \"running\": false,\n  \"mode\": \"single\",\n  \"message\": \"Listener apagado y guardado en BD con drenaje acotado de mensajes in-flight.\"\n}"
 						}
 					]
 				},
@@ -121,7 +121,7 @@
 									"value": "application/json"
 								}
 							],
-							"body": "{\n  \"enabled\": true,\n  \"running\": true,\n  \"message\": \"Listener encendido inmediatamente y guardado en BD.\"\n}"
+							"body": "{\n  \"enabled\": true,\n  \"running\": true,\n  \"mode\": \"single\",\n  \"message\": \"Listener encendido inmediatamente y guardado en BD.\"\n}"
 						}
 					]
 				}

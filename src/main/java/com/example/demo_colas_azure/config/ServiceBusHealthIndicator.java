@@ -1,5 +1,7 @@
 package com.example.demo_colas_azure.config;
 
+import java.time.Instant;
+
 import org.springframework.boot.health.contributor.Health;
 import org.springframework.boot.health.contributor.HealthIndicator;
 import org.springframework.stereotype.Component;
@@ -10,7 +12,8 @@ import lombok.RequiredArgsConstructor;
 
 /**
  * HealthIndicator personalizado para Kubernetes (Liveness y Readiness Probes).
- * Permite a Kubernetes detectar si el microservicio se ha vuelto un "pod zombie"
+ * Permite a Kubernetes detectar si el microservicio se ha vuelto un "pod
+ * zombie"
  * por deadlocks o errores fatales en las conexiones a Service Bus.
  */
 @Component("serviceBus")
@@ -21,21 +24,45 @@ public class ServiceBusHealthIndicator implements HealthIndicator {
 
     @Override
     public Health health() {
+        String mode = queueListenerManager.getMode();
+
         if (queueListenerManager.isFatalErrorEncountered()) {
-            return Health.down()
-                    .withDetail("reason", "Fallo fatal en conexión o autenticación de Azure Service Bus")
-                    .withDetail("error", queueListenerManager.getLastFatalErrorMessage())
+            Health.Builder builder = Health.down()
+                    .withDetail("reason", "Fallo fatal en conexión o autenticación de Azure Service Bus");
+
+            if (mode != null) {
+                builder.withDetail("mode", mode);
+            }
+
+            String lastFatalErrorMessage = queueListenerManager.getLastFatalErrorMessage();
+            if (lastFatalErrorMessage != null) {
+                builder.withDetail("error", lastFatalErrorMessage);
+            }
+
+            return builder
                     .withDetail("listenerRunning", false)
+                    .withDetail("inFlightMessages", queueListenerManager.getInFlightMessages())
                     .build();
         }
 
-        return Health.up()
-                .withDetail("listenerRunning", queueListenerManager.isRunning())
+        Health.Builder builder = Health.up()
+                .withDetail("listenerRunning", queueListenerManager.isRunning());
+
+        if (mode != null) {
+            builder.withDetail("mode", mode);
+        }
+
+        builder.withDetail("inFlightMessages", queueListenerManager.getInFlightMessages())
                 .withDetail("messagesProcessed", queueListenerManager.getMessagesProcessed())
                 .withDetail("messagesAbandoned", queueListenerManager.getMessagesAbandoned())
                 .withDetail("messagesDeadLettered", queueListenerManager.getMessagesDeadLettered())
-                .withDetail("messagesErrored", queueListenerManager.getMessagesErrored())
-                .withDetail("lastMessageProcessedAt", queueListenerManager.getLastMessageProcessedAt())
-                .build();
+                .withDetail("messagesErrored", queueListenerManager.getMessagesErrored());
+
+        Instant lastMessageProcessedAt = queueListenerManager.getLastMessageProcessedAt();
+        if (lastMessageProcessedAt != null) {
+            builder.withDetail("lastMessageProcessedAt", lastMessageProcessedAt);
+        }
+
+        return builder.build();
     }
 }
